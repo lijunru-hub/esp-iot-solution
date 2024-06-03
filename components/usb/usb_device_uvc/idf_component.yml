@@ -16,7 +16,7 @@ dependencies:
     version: ">=0.15.0~7"
     rules:
       - if: "idf_version >=5.0"
-    override_path: ../../../../../lijunru-hub/tinyusb
+    # override_path: ../../../../../lijunru-hub/tinyusb
   # leeebo/tinyusb_src:
   #   version: ">=0.16.0~2"
   #   rules:
