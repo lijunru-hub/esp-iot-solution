@@ -132,6 +132,15 @@ static esp_err_t _led_indicator_remove_node(_led_indicator_t *p_led_indicator)
     return ESP_OK;
 }
 
+static uint32_t _ihsv_convert_to_gamma(uint32_t ihsv_value)
+{
+    led_indicator_ihsv_t ihsv = {
+        .value = ihsv_value,
+    };
+    ihsv.v = led_indicator_get_gamma_value(ihsv.v);
+    return ihsv.value;
+}
+
 /**
  * @brief switch to the first high priority incomplete blink steps
  *
@@ -322,7 +331,7 @@ static void _blink_list_runner(TimerHandle_t xTimer)
                 ESP_LOGW(TAG, "LED_BLINK_HSV Skip: no hal_indicator_set_hsv function");
                 break;
             }
-            p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, p_blink_step_value.value);
+            p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, _ihsv_convert_to_gamma(p_blink_step_value.value));
             p_led_indicator->current_fade_value = p_blink_step_value;
             p_led_indicator->last_fade_value = p_led_indicator->current_fade_value;
             if (p_blink_step->hold_time_ms == 0) {
@@ -345,7 +354,7 @@ static void _blink_list_runner(TimerHandle_t xTimer)
             int16_t diff[3] = {0};
 
             if (p_blink_step->hold_time_ms == 0) {
-                p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, p_blink_step_value.value);
+                p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, _ihsv_convert_to_gamma(p_blink_step_value.value));
                 p_led_indicator->current_fade_value = p_blink_step_value;
                 p_led_indicator->last_fade_value = p_led_indicator->current_fade_value;
                 p_led_indicator->p_blink_steps[active_blink] += 1;
@@ -376,7 +385,7 @@ static void _blink_list_runner(TimerHandle_t xTimer)
             ESP_LOGD(TAG, "current_fade_value: [%d, %d, %d]\n", p_led_indicator->current_fade_value.h, p_led_indicator->current_fade_value.s, p_led_indicator->current_fade_value.v);
 
             p_led_indicator->current_fade_value.i = p_blink_step_value.i;
-            p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, p_led_indicator->current_fade_value.value);
+            p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, _ihsv_convert_to_gamma(p_led_indicator->current_fade_value.value));
 
             leave = true;
             timer_restart = true;
@@ -399,11 +408,9 @@ static void _blink_list_runner(TimerHandle_t xTimer)
                 break;
             }
 
-            uint8_t brightness_value = p_blink_step_value.v;
-            brightness_value = led_indicator_get_gamma_value(brightness_value);
-            p_led_indicator->current_fade_value.v = brightness_value;
+            p_led_indicator->current_fade_value.v = p_blink_step_value.v;
             p_led_indicator->current_fade_value.i = p_blink_step_value.i;
-            p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, p_led_indicator->current_fade_value.value);
+            p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, led_indicator_get_gamma_value(p_blink_step_value.v));
             p_led_indicator->last_fade_value = p_led_indicator->current_fade_value;
             if (p_blink_step->hold_time_ms == 0) {
                 break;
@@ -429,9 +436,8 @@ static void _blink_list_runner(TimerHandle_t xTimer)
             // diff_brightness > 0: Fade increase
             // diff_brightness < 0: Fade decrease
             if (p_blink_step->hold_time_ms == 0) {
-                brightness_value =  led_indicator_get_gamma_value(brightness_value);
                 p_led_indicator->current_fade_value.v = brightness_value;
-                p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, p_led_indicator->current_fade_value.value);
+                p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, led_indicator_get_gamma_value(brightness_value));
                 p_led_indicator->last_fade_value = p_led_indicator->current_fade_value;
                 p_led_indicator->p_blink_steps[active_blink] += 1;
                 break;
@@ -442,9 +448,8 @@ static void _blink_list_runner(TimerHandle_t xTimer)
             } else {
                 brightness_value = p_led_indicator->last_fade_value.v - p_led_indicator->fade_value_count;
             }
-            brightness_value =  led_indicator_get_gamma_value(brightness_value);
             p_led_indicator->current_fade_value.v = brightness_value;
-            p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, p_led_indicator->current_fade_value.value);
+            p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, led_indicator_get_gamma_value(brightness_value));
 
             if (diff_value == 0) {
                 ticks = p_blink_step->hold_time_ms;
@@ -786,7 +791,7 @@ esp_err_t led_indicator_set_brightness(led_indicator_handle_t handle, uint32_t b
         return ESP_FAIL;
     }
     xSemaphoreTake(p_led_indicator->mutex, portMAX_DELAY);
-    p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, brightness);
+    p_led_indicator->hal_indicator_set_brightness(p_led_indicator->hardware_data, led_indicator_get_gamma_value(brightness));
     led_indicator_ihsv_t ihsv = {
         .value = brightness,
     };
@@ -817,7 +822,7 @@ esp_err_t led_indicator_set_hsv(led_indicator_handle_t handle, uint32_t ihsv_val
         return ESP_FAIL;
     }
     xSemaphoreTake(p_led_indicator->mutex, portMAX_DELAY);
-    p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, ihsv_value);
+    p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, _ihsv_convert_to_gamma(ihsv_value));
     p_led_indicator->current_fade_value.value = ihsv_value;
     p_led_indicator->last_fade_value.value = ihsv_value;
     xSemaphoreGive(p_led_indicator->mutex);
@@ -886,7 +891,7 @@ esp_err_t led_indicator_set_color_temperature(led_indicator_handle_t handle, con
     p_led_indicator->current_fade_value.h = hue;
     p_led_indicator->current_fade_value.s = saturation;
     p_led_indicator->current_fade_value.i = GET_INDEX(temperature);
-    p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, p_led_indicator->current_fade_value.value);
+    p_led_indicator->hal_indicator_set_hsv(p_led_indicator->hardware_data, _ihsv_convert_to_gamma(p_led_indicator->current_fade_value.value));
     p_led_indicator->last_fade_value = p_led_indicator->current_fade_value;
     xSemaphoreGive(p_led_indicator->mutex);
     return ESP_OK;
